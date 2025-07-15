@@ -4,7 +4,7 @@ import { io } from 'socket.io-client';
 import { useEffect, useState } from 'react';
 
 // Socket.io connection URL
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000';
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'https://week-7-devops-deployment-assignment-3.onrender.com';
 
 // Create socket instance
 export const socket = io(SOCKET_URL, {
