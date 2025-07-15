@@ -1,78 +1,163 @@
-[![Open in Visual Studio Code](https://classroom.github.com/assets/open-in-vscode-2e0aaae1b6195c2367325f4f02e2d04e9abb55f0b24a779b69b11b9e10269abc.svg)](https://classroom.github.com/online_ide?assignment_repo_id=19919938&assignment_repo_type=AssignmentRepo)
-# Deployment and DevOps for MERN Applications
+Real-Time Chat Application with Socket.io
+This project implements a real-time chat application using React for the frontend and Node.js with Express and Socket.io for the backend. It features bidirectional communication, user presence, multiple chat rooms, private messaging, typing indicators, and read receipts.
 
-This assignment focuses on deploying a full MERN stack application to production, implementing CI/CD pipelines, and setting up monitoring for your application.
+Table of Contents
+Features
 
-## Assignment Overview
+Project Structure
 
-You will:
-1. Prepare your MERN application for production deployment
-2. Deploy the backend to a cloud platform
-3. Deploy the frontend to a static hosting service
-4. Set up CI/CD pipelines with GitHub Actions
-5. Implement monitoring and maintenance strategies
+Getting Started
 
-## Getting Started
+Prerequisites
 
-1. Accept the GitHub Classroom assignment invitation
-2. Clone your personal repository that was created by GitHub Classroom
-3. Follow the setup instructions in the `Week7-Assignment.md` file
-4. Use the provided templates and configuration files as a starting point
+Installation
 
-## Files Included
+Running the Application
 
-- `Week7-Assignment.md`: Detailed assignment instructions
-- `.github/workflows/`: GitHub Actions workflow templates
-- `deployment/`: Deployment configuration files and scripts
-- `.env.example`: Example environment variable templates
-- `monitoring/`: Monitoring configuration examples
+Advanced Features Implemented
 
-## Requirements
+Screenshots
 
-- A completed MERN stack application from previous weeks
-- Accounts on the following services:
-  - GitHub
-  - MongoDB Atlas
-  - Render, Railway, or Heroku (for backend)
-  - Vercel, Netlify, or GitHub Pages (for frontend)
-- Basic understanding of CI/CD concepts
+Submission Notes
 
-## Deployment Platforms
+Resources
 
-### Backend Deployment Options
-- **Render**: Easy to use, free tier available
-- **Railway**: Developer-friendly, generous free tier
-- **Heroku**: Well-established, extensive documentation
+Features
+This application includes the following core and advanced features:
 
-### Frontend Deployment Options
-- **Vercel**: Optimized for React apps, easy integration
-- **Netlify**: Great for static sites, good CI/CD
-- **GitHub Pages**: Free, integrated with GitHub
+Real-time Messaging: Instant message delivery between users in shared chat rooms.
 
-## CI/CD Pipeline
+User Authentication & Presence: Users can join rooms with a chosen username. The application displays a list of active users in the current room, indicating their presence.
 
-The assignment includes templates for setting up GitHub Actions workflows:
-- `frontend-ci.yml`: Tests and builds the React application
-- `backend-ci.yml`: Tests the Express.js backend
-- `frontend-cd.yml`: Deploys the frontend to your chosen platform
-- `backend-cd.yml`: Deploys the backend to your chosen platform
+Multiple Chat Rooms: Users can join different public chat rooms.
 
-## Submission
+Private Messaging: Users can initiate one-on-one private conversations with other online users.
 
-Your work will be automatically submitted when you push to your GitHub Classroom repository. Make sure to:
+Real-time Notifications: Users are notified when others join or leave a room.
 
-1. Complete all deployment tasks
-2. Set up CI/CD pipelines with GitHub Actions
-3. Deploy both frontend and backend to production
-4. Document your deployment process in the README.md
-5. Include screenshots of your CI/CD pipeline in action
-6. Add URLs to your deployed applications
+Typing Indicators: Displays when another user in the same chat (room or private) is actively typing a message.
 
-## Resources
+Read Receipts: Provides visual confirmation (double checkmark) when your messages have been read by other participants.
 
-- [GitHub Actions Documentation](https://docs.github.com/en/actions)
-- [MongoDB Atlas Documentation](https://docs.atlas.mongodb.com/)
-- [Render Documentation](https://render.com/docs)
-- [Railway Documentation](https://docs.railway.app/)
-- [Vercel Documentation](https://vercel.com/docs)
-- [Netlify Documentation](https://docs.netlify.com/) 
+Project Structure
+socketio-chat/
+├── client/           # React front-end
+│   ├── public/       # Static files (index.html, manifest.json)
+│   ├── src/          # React source code
+│   │   ├── components/ # UI components
+│   │   ├── context/    # React context providers (empty, but structured for future use)
+│   │   ├── hooks/      # Custom React hooks (empty, but structured for future use)
+│   │   ├── pages/      # Page components (empty, but structured for future use)
+│   │   ├── socket/     # Socket.io client setup (socket.js - currently unused, but present)
+│   │   ├── App.jsx     # Main application component
+│   │   ├── index.js    # React app entry point
+│   │   └── index.css   # Tailwind CSS imports and custom styles
+│   └── package.json    # Client dependencies
+│   └── tailwind.config.js # Tailwind CSS configuration
+├── server/           # Node.js back-end
+│   ├── config/       # Configuration files (empty, but structured for future use)
+│   ├── controllers/  # Socket event handlers (empty, but structured for future use)
+│   ├── models/       # Data models (empty, but structured for future use)
+│   ├── socket/       # Socket.io server setup (empty, but structured for future use)
+│   ├── utils/        # Utility functions (empty, but structured for future use)
+│   ├── server.js     # Main server file
+│   └── package.json    # Server dependencies
+└── README.md         # Project documentation
+
+Getting Started
+Follow these instructions to set up and run the application on your local machine.
+
+Prerequisites
+Node.js (v18 or higher recommended)
+
+npm or pnpm (pnpm was used during development)
+
+A modern web browser
+
+Installation
+Clone the repository:
+If you haven't already, clone your GitHub Classroom repository. The root folder name will be similar to week-5-web-sockets-assignment-3-Stax.
+
+git clone <your-repository-url>
+cd week-5-web-sockets-assignment-3-Stax
+
+Navigate to the server directory and install dependencies:
+
+cd server
+# Clean up previous installations (optional, but recommended for a fresh start)
+rm -rf node_modules
+rm pnpm-lock.yaml # or yarn.lock / package-lock.json if you use npm/yarn
+pnpm install # or npm install / yarn install
+
+Navigate to the client directory and install dependencies:
+
+cd ../client
+# Clean up previous installations (optional, but recommended for a fresh start)
+rm -rf node_modules
+rm pnpm-lock.yaml # or yarn.lock / package-lock.json if you use npm/yarn
+pnpm install # or npm install / yarn install
+
+Running the Application
+You will need two separate terminal windows for the server and the client.
+
+Start the Server:
+Open your first terminal window, navigate to the server directory, and run:
+
+cd week-5-web-sockets-assignment-3-Stax/server
+pnpm start # or npm start / node server.js
+
+You should see Server running on port 5000. Keep this terminal open.
+
+Start the Client:
+Open your second terminal window, navigate to the client directory, and run:
+
+cd week-5-web-sockets-assignment-3-Stax/client
+pnpm start # or npm start
+
+This will open the React application in your browser, usually at http://localhost:3000. Keep this terminal open.
+
+Test the Chat:
+
+Open http://localhost:3000 in your browser.
+
+Enter a username and a room name (e.g., "Alice", "General"). Click "Join Chat".
+
+Open another browser tab or an incognito window and navigate to http://localhost:3000 again.
+
+Enter a different username (e.g., "Bob") and the same room name ("General"). Click "Join Chat".
+
+You can now send messages between Alice and Bob in the "General" room.
+
+To test private messaging, click on a user's name in the "Users in [Room Name]" list.
+
+Advanced Features Implemented
+As per the assignment requirements, the following advanced features have been implemented:
+
+Typing Indicators: Users can see when another user is actively typing in the same chat room or private conversation.
+
+Read Receipts: Sent messages display a single checkmark when delivered and a double checkmark when read by the recipient(s).
+
+Private Messaging: Users can select another online user from the user list to initiate a private, one-on-one chat.
+
+Screenshots
+(Placeholder for screenshots of your working application)
+
+Screenshot 1: Login/Join Room Screen
+
+Screenshot 2: Public Chat Room with multiple users and messages
+
+Screenshot 3: Private Chat window
+
+Screenshot 4: Typing indicator in action
+
+Screenshot 5: Read receipts on messages
+
+
+Resources
+Socket.io Documentation
+
+React Documentation
+
+Express.js Documentation
+
+Tailwind CSS Documentation

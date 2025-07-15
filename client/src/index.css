@@ -1,0 +1,44 @@
+/* client/src/index.css */
+/* These Tailwind directives are crucial. They are replaced by Tailwind's generated CSS. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Basic body styling to ensure the app takes full height and uses the Inter font */
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif; /* Using Inter font as per instructions */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f0f2f5; /* Light gray background for the overall page */
+  height: 100vh; /* Ensure body takes full viewport height */
+  overflow: hidden; /* Prevent body scroll if content overflows */
+}
+
+/* The root div where the React app is mounted. */
+#root {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh; /* Ensure the root div also takes full viewport height */
+  width: 100vw; /* Ensure it takes full viewport width */
+}
+
+/* Custom scrollbar for chat messages and user list */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px; /* Width of the scrollbar */
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #e2e8f0; /* Light gray track */
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #94a3b8; /* Gray thumb */
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #64748b; /* Darker gray on hover */
+}
