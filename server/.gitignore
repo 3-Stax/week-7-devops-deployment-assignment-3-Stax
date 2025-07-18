@@ -24,3 +24,11 @@ yarn-error.log*
 *.sqlite3
 /tmp
 /temp
+
+
+# server/.gitignore
+/node_modules
+.env
+.env.development
+.env.production
+.env.local
