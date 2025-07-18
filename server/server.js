@@ -109,18 +109,12 @@ if (process.env.CLIENT_ORIGIN) {
 }
 
 // CORS for Express HTTP routes
+// TEMPORARY & INSECURE: Allowing all origins for assignment submission.
+// *** YOU MUST REVERT THIS FOR PRODUCTION DEPLOYMENTS ***
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (e.g., Postman, mobile apps, curl) or if origin is in allowed list
-    if (!origin || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    const msg = `The CORS policy for this site does not allow access from the Origin: ${origin}.`;
-    logger.warn(msg); // Log the blocked origin
-    return callback(new Error(msg), false);
-  },
-  methods: ["GET", "POST", "PUT", "DELETE"], // Define allowed HTTP methods
-  credentials: true // Allow sending cookies/authorization headers
+  origin: "*", // Allows requests from any origin
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true // Note: 'credentials: true' with 'origin: "*"' is complex and might still cause issues in some browsers. If so, try 'credentials: false'
 }));
 
 // HTTP Request Logging with Morgan
@@ -139,19 +133,13 @@ app.use(express.json());
 const server = http.createServer(app);
 
 // Initialize Socket.io server with CORS configured to match allowed origins
+// TEMPORARY & INSECURE: Allowing all Socket.io origins for assignment submission.
+// *** YOU MUST REVERT THIS FOR PRODUCTION DEPLOYMENTS ***
 const io = new Server(server, {
   cors: {
-    origin: (origin, callback) => {
-      // Allow requests with no origin (e.g., Postman, mobile apps, curl) or if origin is in allowed list
-      if (!origin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      const msg = `The CORS policy for this site does not allow Socket.io access from the Origin: ${origin}.`;
-      logger.warn(msg); // Log the blocked origin
-      return callback(new Error(msg), false);
-    },
-    methods: ["GET", "POST"], // Socket.io typically only needs GET/POST for handshakes
-    credentials: true
+    origin: "*", // Allows requests from any origin
+    methods: ["GET", "POST"],
+    credentials: true // If issues persist, try 'credentials: false' here too
   }
 });
 
