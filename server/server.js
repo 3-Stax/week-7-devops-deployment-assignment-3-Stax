@@ -1,192 +1,156 @@
 // server/server.js
 
-// --- 1. Load Environment Variables ---
-// Conditionally load environment variables based on NODE_ENV.
-// In production, hosting platforms typically inject these directly.
-// Only load dotenv if not in production, as env vars should be pre-set in deploy environments.
+// --- 1. Environment Setup ---
+// Conditionally load environment variables from .env.development if not in production.
+// Hosting platforms (like Railway, Render) inject variables directly in production.
 if (process.env.NODE_ENV !== 'production') {
   require('dotenv').config({ path: '.env.development' });
 }
-// Note: In production, process.env.NODE_ENV is usually 'production' and variables
-// like MONGO_URI, CLIENT_ORIGIN are injected directly by Render, Vercel etc.
-// No need for a .env.production file unless it's a very specific setup.
 
-// Import necessary modules
+// --- 2. Core Imports ---
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const mongoose = require('mongoose');     // Mongoose for MongoDB interaction
-const helmet = require('helmet');         // Helmet for security headers
-const morgan = require('morgan');         // Morgan for HTTP request logging
-const winston = require('winston');       // Winston for structured logging
-const asyncHandler = require('express-async-handler'); // For handling async errors in routes
-// Removed redundant 'mongoose' and 'dotenv' imports.
-// 'path' is not directly used, so it's removed unless needed for other file operations.
+const mongoose = require('mongoose');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const winston = require('winston');
+const asyncHandler = require('express-async-handler');
 
-// --- 2. Configure Logging with Winston ---
+// --- 3. Winston Logger Setup ---
 const logger = winston.createLogger({
   level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
   format: winston.format.combine(
     winston.format.timestamp(),
-    winston.format.json() // Use JSON format for production logs for easier parsing by log aggregators
+    winston.format.json() // JSON format for production logs
   ),
   transports: [
     new winston.transports.Console({
       format: winston.format.combine(
-        winston.format.colorize(), // Colorize for console readability during development
-        winston.format.simple()    // Simple format for clear console output
+        winston.format.colorize(), // Colorized for local dev readability
+        winston.format.simple()
       ),
-      silent: process.env.NODE_ENV === 'test' // Suppress logs during automated tests
+      silent: process.env.NODE_ENV === 'test' // Suppress logs during tests
     }),
-    // For a robust production environment, consider adding file transports
-    // or integrating with external logging services like Sentry, CloudWatch, DataDog, etc.
   ],
 });
 
-// --- 3. MongoDB Connection Setup ---
+// --- 4. MongoDB Connection ---
 const connectDB = async () => {
   try {
-    // Attempt to connect to MongoDB using the URI from environment variables
     const conn = await mongoose.connect(process.env.MONGO_URI);
     logger.info(`MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
-    // Log the error and exit the process if connection fails
-    logger.error(`Error connecting to MongoDB: ${error.message}`);
-    // A more graceful shutdown might involve specific error codes or retries
-    process.exit(1); // Exit process with a failure code
+    logger.error(`MongoDB Connection Error: ${error.message}`);
+    process.exit(1); // Exit process on connection failure
   }
 };
-
-// Initiate database connection
 connectDB();
+logger.info('MongoDB connection attempted and connectDB function called.'); // VERBOSE LOG
 
-// --- 4. Define Mongoose Schema and Model for Messages ---
+// --- 5. Mongoose Schema ---
 const messageSchema = new mongoose.Schema({
-  // 'id' is often redundant if '_id' (MongoDB's default) is used directly.
-  // It's recommended to use '_id' for database interactions and only convert
-  // to a client-side 'id' if explicitly required by the frontend logic.
-  // If removed here, ensure client-side adapts to use _id or generates its own.
-  id: { type: String, required: true, unique: true }, // For client-side tracking, potentially redundant with _id
   username: { type: String, required: true },
   text: { type: String, required: true },
   room: { type: String, required: true },
   timestamp: { type: Date, default: Date.now },
-  readBy: [{ type: String }], // Array of socket IDs or user IDs who have read the message
+  readBy: [{ type: String }],
   isPrivate: { type: Boolean, default: false },
-  senderId: { type: String }, // Storing sender's socket ID or user ID
-  recipientId: { type: String } // Storing recipient's socket ID or user ID for private messages
+  senderId: { type: String },
+  recipientId: { type: String }
+}, {
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
-// Add an index to 'room' for efficient querying of room messages
 messageSchema.index({ room: 1 });
-// Add an index for private messages if querying by sender/recipient pairs is common
 messageSchema.index({ senderId: 1, recipientId: 1, isPrivate: 1 });
 
 const Message = mongoose.model('Message', messageSchema);
+logger.info('Mongoose schema and model for Message defined.'); // VERBOSE LOG
 
-// --- Initialize Express app ---
+// --- 6. Express & Middleware ---
 const app = express();
 
-// --- 5. Middleware Setup ---
-// Apply Security Headers using Helmet
+// Security Headers
 app.use(helmet());
 
-// CORS configuration for both Express and Socket.io
-// This is the CRITICAL part for your deployment issues.
-// `process.env.CLIENT_ORIGIN` will contain your Vercel URL.
-// It's dynamically added to `allowedOrigins`.
-const allowedOrigins = [
-  'http://localhost:3000', // Your local React development server
-];
-
-// Add the production CLIENT_ORIGIN if it's defined (from Render environment variables)
-if (process.env.CLIENT_ORIGIN) {
-  allowedOrigins.push(process.env.CLIENT_ORIGIN);
-  logger.info(`Adding CLIENT_ORIGIN to allowedOrigins: ${process.env.CLIENT_ORIGIN}`);
-} else {
-  logger.warn('CLIENT_ORIGIN environment variable is not set on the server.');
-}
-
-// CORS for Express HTTP routes
+// CORS Configuration (CRITICAL for deployment)
 // TEMPORARY & INSECURE: Allowing all origins for assignment submission.
-// *** YOU MUST REVERT THIS FOR PRODUCTION DEPLOYMENTS ***
+// *** YOU MUST REVERT THIS FOR PRODUCTION DEPLOYMENTS AFTER SUBMISSION ***
 app.use(cors({
   origin: "*", // Allows requests from any origin
   methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true // Note: 'credentials: true' with 'origin: "*"' is complex and might still cause issues in some browsers. If so, try 'credentials: false'
+  credentials: true
 }));
+logger.info('Express CORS middleware configured with origin: "*"'); // VERBOSE LOG
 
-// HTTP Request Logging with Morgan
+// Logging
 if (process.env.NODE_ENV === 'production') {
-  // Use 'combined' format for detailed production logs, piped to Winston
   app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
 } else {
-  // Use 'dev' format for concise and colorful development logs
   app.use(morgan('dev'));
 }
+logger.info('Morgan HTTP request logger configured.'); // VERBOSE LOG
 
-// Body parser for JSON requests
+// Body Parser
 app.use(express.json());
+logger.info('Express JSON body parser configured.'); // VERBOSE LOG
 
-// Create an HTTP server using the Express app
+// --- 7. Socket.IO Setup ---
 const server = http.createServer(app);
 
-// Initialize Socket.io server with CORS configured to match allowed origins
+// Socket.io CORS (CRITICAL for deployment)
 // TEMPORARY & INSECURE: Allowing all Socket.io origins for assignment submission.
-// *** YOU MUST REVERT THIS FOR PRODUCTION DEPLOYMENTS ***
+// *** YOU MUST REVERT THIS FOR PRODUCTION DEPLOYMENTS AFTER SUBMISSION ***
 const io = new Server(server, {
   cors: {
     origin: "*", // Allows requests from any origin
     methods: ["GET", "POST"],
-    credentials: true // If issues persist, try 'credentials: false' here too
+    credentials: true
   }
 });
+logger.info('Socket.IO server initialized with origin: "*"'); // VERBOSE LOG
 
-// In-memory data store for currently active users (volatile, not persisted across server restarts)
-// Map<socket.id, { username: string, room: string, id: string }>
-// NOTE: For highly scalable applications, this should be replaced with a persistent store
-// like Redis or a database to manage user presence across multiple server instances.
+// In-Memory Active Users
 const activeUsers = new Map();
+logger.info('In-memory activeUsers map initialized.'); // VERBOSE LOG
 
-// --- Socket.io Event Handling ---
+// --- 8. Socket.IO Events ---
 io.on('connection', (socket) => {
-  logger.info(`User connected: ${socket.id}`);
+  logger.info(`New connection: ${socket.id}`);
 
-  // Handle 'joinRoom' event
+  // Join Room
   socket.on('joinRoom', asyncHandler(async ({ username, room }) => {
     // If the user was previously in another room, make them leave it first
     if (activeUsers.has(socket.id)) {
       const prevUser = activeUsers.get(socket.id);
       socket.leave(prevUser.room);
       logger.info(`${prevUser.username} (${socket.id}) left room: ${prevUser.room}`);
-      // Update user list for the previous room (more robust cleanup logic might be needed for a complex app)
+      // Update user list for the previous room
       const prevRoomUsers = Array.from(activeUsers.values()).filter(u => u.room === prevUser.room && u.id !== socket.id);
       io.to(prevUser.room).emit('roomUsers', prevRoomUsers);
     }
 
-    // Add/update user in the activeUsers map and join the new room
     const user = { id: socket.id, username, room };
     activeUsers.set(socket.id, user);
     socket.join(room);
 
     logger.info(`${username} (${socket.id}) joined room: ${room}`);
 
-    // Fetch message history for the room from the database
-    // Only fetch non-private messages for the specific room
-    const roomMessages = await Message.find({ room: room, isPrivate: false })
-      .sort({ timestamp: 1 }) // Sort messages by timestamp in ascending order
-      .lean(); // Use .lean() for performance when not modifying Mongoose documents
+    // Fetch room messages (non-private)
+    const messages = await Message.find({ room, isPrivate: false }).sort({ timestamp: 1 }).lean();
 
     // Emit a welcome message directly to the joining user
     socket.emit('message', {
       username: 'ChatBot',
       text: `Welcome to the ${room} chat room, ${username}!`,
       timestamp: new Date().toISOString(),
-      id: new mongoose.Types.ObjectId().toHexString() // More robust unique ID
+      id: new mongoose.Types.ObjectId().toHexString()
     });
 
-    // Broadcast to others in the room that a new user has joined
+    // Notify room
     socket.to(room).emit('message', {
       username: 'ChatBot',
       text: `${username} has joined the chat.`,
@@ -199,126 +163,111 @@ io.on('connection', (socket) => {
     io.to(room).emit('roomUsers', currentRoomUsers);
 
     // Send existing messages for the room to the newly joined user
-    socket.emit('roomMessages', roomMessages);
+    socket.emit('roomMessages', messages);
   }));
 
-  // Handle 'chatMessage' event (public messages)
-  socket.on('chatMessage', asyncHandler(async (msgText) => {
+  // Public Message
+  socket.on('chatMessage', asyncHandler(async (text) => {
     const user = activeUsers.get(socket.id);
-    if (user) {
-      // Create a new message document
-      const message = new Message({
-        id: new mongoose.Types.ObjectId().toHexString(), // Generate a unique ID for the message
-        username: user.username,
-        text: msgText,
-        room: user.room,
-        timestamp: new Date(),
-        readBy: [user.id], // Mark as read by the sender initially
-        isPrivate: false
-      });
-      await message.save(); // Save the message to MongoDB
-
-      // Emit the saved message object to everyone in the room
-      io.to(user.room).emit('message', message.toObject());
-      logger.info(`Message from ${user.username} in ${user.room}: ${msgText}`);
-    } else {
+    if (!user) {
       logger.warn(`Attempt to send message by unknown user (socket ID): ${socket.id}`);
-      // Optionally, emit an error back to the client
       socket.emit('message', {
         username: 'ChatBot',
         text: 'Error: You are not recognized. Please rejoin the chat.',
         timestamp: new Date().toISOString(),
         id: new mongoose.Types.ObjectId().toHexString()
       });
+      return; // Exit to prevent further errors
     }
+
+    const message = new Message({
+      id: new mongoose.Types.ObjectId().toHexString(),
+      username: user.username,
+      text,
+      room: user.room,
+      readBy: [user.id],
+      isPrivate: false
+    });
+
+    await message.save();
+    io.to(user.room).emit('message', message.toObject());
+    logger.info(`Message from ${user.username} in ${user.room}: ${text}`);
   }));
 
-  // Handle 'typing' event
+  // Typing
   socket.on('typing', () => {
     const user = activeUsers.get(socket.id);
     if (user) {
-      // Broadcast to others in the same room that this user is typing
       socket.to(user.room).emit('typing', user.username);
     }
   });
 
-  // Handle 'stopTyping' event
+  // Stop Typing
   socket.on('stopTyping', () => {
     const user = activeUsers.get(socket.id);
     if (user) {
-      // Broadcast to others in the same room that this user has stopped typing
       socket.to(user.room).emit('stopTyping', user.username);
     }
   });
 
-  // Handle 'messageRead' event (for read receipts)
+  // Message Read
   socket.on('messageRead', asyncHandler(async ({ messageId, roomId }) => {
     const user = activeUsers.get(socket.id);
     if (user) {
-      // Find the message by its client-side 'id' and room
       const messageToUpdate = await Message.findOne({ id: messageId, room: roomId });
       if (messageToUpdate && !messageToUpdate.readBy.includes(user.id)) {
-        messageToUpdate.readBy.push(user.id); // Add the user's ID to the readBy array
-        await messageToUpdate.save(); // Save the updated message with new readBy status
-
-        // Emit the updated message to the room so all clients can update their UI
+        messageToUpdate.readBy.push(user.id);
+        await messageToUpdate.save();
         io.to(roomId).emit('messageUpdated', messageToUpdate.toObject());
         logger.info(`Message ${messageId} in room ${roomId} read by ${user.username}`);
       }
     }
   }));
 
-  // Handle 'privateMessage' event
+  // Private Message
   socket.on('privateMessage', asyncHandler(async ({ recipientId, message: msgText }) => {
     const sender = activeUsers.get(socket.id);
     const recipient = activeUsers.get(recipientId);
 
-    if (sender && recipient) {
-      // For private messages, the 'room' field in the DB could be a normalized private chat ID
-      // (e.g., a combination of sender/recipient IDs) to easily retrieve history for that private chat.
-      // Example: const privateRoomId = [sender.id, recipient.id].sort().join('-'); // Consistent ID
-      // Ensure 'room' here is consistent for fetching private message history.
-      const privateRoomIdentifier = [sender.id, recipient.id].sort().join('-'); // Ensures unique and consistent ID for the private chat between two users
-
-      const privateMsg = new Message({
-        id: new mongoose.Types.ObjectId().toHexString(), // Unique ID for the private message
-        username: sender.username,
-        text: msgText,
-        room: privateRoomIdentifier, // Use the consistent private room ID
-        isPrivate: true,
-        senderId: sender.id,
-        recipientId: recipient.id,
-        timestamp: new Date(),
-        readBy: [sender.id] // Marked as read by the sender upon sending
-      });
-      await privateMsg.save(); // Save private message to MongoDB
-
-      // Send the private message to the recipient
-      io.to(recipientId).emit('message', privateMsg.toObject());
-      // Also send a copy to the sender's own socket so they see it in their chat interface
-      socket.emit('message', privateMsg.toObject());
-      logger.info(`Private message from ${sender.username} to ${recipient.username}: ${msgText}`);
-    } else {
-      // Notify the sender if the recipient is not found or offline
+    if (!sender || !recipient) {
       socket.emit('message', {
         username: 'ChatBot',
-        text: 'Error: Recipient not found or offline for private message.',
+        text: 'Error: Invalid sender or recipient for private message.',
         timestamp: new Date().toISOString(),
         id: new mongoose.Types.ObjectId().toHexString()
       });
-      logger.warn(`Failed private message from ${sender?.username || socket.id} to ${recipientId}: Recipient not found or offline.`);
+      logger.warn(`Failed private message from ${sender?.username || socket.id} to ${recipientId}: Invalid sender/recipient.`);
+      return; // Exit to prevent further errors
     }
+
+    const privateRoomIdentifier = [sender.id, recipient.id].sort().join('-'); // Consistent ID
+
+    const privateMsg = new Message({
+      id: new mongoose.Types.ObjectId().toHexString(),
+      username: sender.username,
+      text: msgText,
+      room: privateRoomIdentifier,
+      isPrivate: true,
+      senderId: sender.id,
+      recipientId: recipient.id,
+      timestamp: new Date(),
+      readBy: [sender.id]
+    });
+
+    await privateMsg.save();
+    io.to(recipientId).emit('message', privateMsg.toObject());
+    socket.emit('message', privateMsg.toObject()); // Echo to sender
+    logger.info(`Private message from ${sender.username} to ${recipient.username}: ${msgText}`);
   }));
 
-  // Handle 'leaveRoom' event (for explicit client-side room departure)
+  // Leave Room
   socket.on('leaveRoom', () => {
     const user = activeUsers.get(socket.id);
     if (user) {
       socket.leave(user.room);
-      activeUsers.delete(socket.id); // Remove user from active users map
+      activeUsers.delete(socket.id);
       logger.info(`${user.username} (${socket.id}) explicitly left room: ${user.room}`);
 
-      // Notify others in the room that the user has left
       socket.to(user.room).emit('message', {
         username: 'ChatBot',
         text: `${user.username} has left the chat.`,
@@ -326,20 +275,18 @@ io.on('connection', (socket) => {
         id: new mongoose.Types.ObjectId().toHexString()
       });
 
-      // Update and send the new list of users for that room
       const currentRoomUsers = Array.from(activeUsers.values()).filter(u => u.room === user.room);
       io.to(user.room).emit('roomUsers', currentRoomUsers);
     }
   });
 
-  // Handle 'disconnect' event (when a user's socket connection closes)
+  // Disconnect
   socket.on('disconnect', () => {
     const user = activeUsers.get(socket.id);
     if (user) {
-      activeUsers.delete(socket.id); // Remove user from active users map
+      activeUsers.delete(socket.id);
       logger.info(`User disconnected: ${user.username} (${socket.id})`);
 
-      // Notify others in the room if the user was in a room and if the room still has active users
       const currentRoomUsers = Array.from(activeUsers.values()).filter(u => u.room === user.room);
       if (currentRoomUsers.length > 0) {
         socket.to(user.room).emit('message', {
@@ -357,37 +304,48 @@ io.on('connection', (socket) => {
     }
   });
 });
+logger.info('Socket.IO connection handler and events defined.'); // VERBOSE LOG
 
-// --- 6. API Routes (Minimal for this chat server) ---
-// Basic health check route
-app.get('/', (req, res) => {
-  res.send('Socket.io chat server is running!');
-});
+// --- 9. API Routes ---
+app.get('/', (req, res) => res.send('Socket.io chat server is running!'));
+logger.info('Base API route defined.'); // VERBOSE LOG
 
-// --- 7. Error Handling Middleware (MUST be placed after all routes and other middleware) ---
-// Catch 404 errors (requests that didn't match any route) and forward to error handler
+// --- 10. Error Handling ---
+// Catch 404 and forward to error handler
 app.use((req, res, next) => {
   const error = new Error('Not Found');
   error.status = 404;
-  next(error); // Pass the error to the next middleware (our general error handler)
+  next(error);
 });
 
-// General error handler middleware
+// General error handler
 app.use((err, req, res, next) => {
-  // Log the error with Winston, including stack trace for debugging
   logger.error(`Error: ${err.message}`, { stack: err.stack, status: err.status, url: req.originalUrl, method: req.method });
-  
-  // Set response status code
-  res.status(err.status || 500);
-  
-  // Send JSON error response
-  res.json({
+
+  res.status(err.status || 500).json({
     message: err.message,
-    // Include stack trace only in development mode for security reasons
-    error: process.env.NODE_ENV === 'development' ? err.stack : {}
+    error: process.env.NODE_ENV === 'development' ? err.stack : {} // Include stack only in dev
   });
 });
+logger.info('Express error handling middleware configured.'); // VERBOSE LOG
 
-// --- 8. Start the HTTP Server ---
-const PORT = process.env.PORT || 5000; // Use port from environment variable or default to 5000
-server.listen(PORT, () => logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV} mode`));
+// --- 11. Uncaught Exception/Rejection Handlers ---
+// Catch all uncaught exceptions to prevent process from crashing silently
+process.on('uncaughtException', (err) => {
+  logger.error(`UNCAUGHT EXCEPTION: ${err.message}`, { stack: err.stack });
+  process.exit(1); // Exit process after logging
+});
+
+// Catch all unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error(`UNHANDLED REJECTION at: ${promise}, reason: ${reason.message || reason}`, { stack: reason.stack });
+  process.exit(1); // Exit process after logging
+});
+logger.info('Global uncaught exception and unhandled rejection handlers configured.'); // VERBOSE LOG
+
+// --- 12. Start Server ---
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+  logger.info('HTTP server successfully started and listening for requests.'); // VERBOSE LOG
+});
